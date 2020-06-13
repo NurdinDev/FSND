@@ -58,8 +58,11 @@ class City(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     city = db.Column(db.String(120), nullable=False)
     state = db.Column(db.String(120), nullable=False)
-    venues = db.relationship("Venue", backref='city', lazy=True, uselist=False)
-    shows = db.relationship("Show", backref='city', lazy=True, uselist=False)
+    venues = db.relationship("Venue", backref='city', lazy=True)
+    shows = db.relationship("Show", backref='city', lazy=True)
+
+    def __repr__(self):
+        return "<City (city='%s' venues='%s')>" % (self.city, self.venues)
 
 
 class Venue(db.Model):
@@ -88,7 +91,7 @@ class Artist(db.Model):
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
-    upcoming_shows = db.relationship("Show", backref='artist', lazy=True)
+    shows = db.relationship("Show", backref='artist', lazy=True)
     city_id = db.Column(db.Integer, db.ForeignKey('cities.id'))
     geners = db.relationship(
         'Geners', secondary=ArtistGenres, backref='artists', lazy=True)
@@ -143,47 +146,19 @@ def index():
 
 @app.route('/venues')
 def venues():
-    # TODO: replace with real venues data.
-    #       num_shows should be aggregated based on number of upcoming shows per venue.
-
-    data = [{
-        "city": "San Francisco",
-        "state": "CA",
-        "venues": [{
-            "id": 1,
-            "name": "The Musical Hop",
-            "num_upcoming_shows": 0,
-        }, {
-            "id": 3,
-            "name": "Park Square Live Music & Coffee",
-            "num_upcoming_shows": 1,
-        }]
-    }, {
-        "city": "New York",
-        "state": "NY",
-        "venues": [{
-            "id": 2,
-            "name": "The Dueling Pianos Bar",
-            "num_upcoming_shows": 0,
-        }]
-    }]
+    data = City.query.all()
     return render_template('pages/venues.html', areas=data)
 
 
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
-    # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-    # seach for Hop should return "The Musical Hop".
-    # search for "Music" should return "The Musical Hop" and "Park Square Live Music & Coffee"
+    search_term = request.form.get('search_term', '')
+    query = Venue.query.filter(Venue.name.like(f'%{search_term}%'))
     response = {
-        "count": 1,
-        "data": [{
-            "id": 2,
-            "name": "The Dueling Pianos Bar",
-            "num_upcoming_shows": 0,
-        }]
+        "count": query.count(),
+        "data": query.all()
     }
-    return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
+    return render_template('pages/search_venues.html', results=response, search_term=search_term)
 
 
 @app.route('/venues/<int:venue_id>')
@@ -605,6 +580,7 @@ def bootstrap_data():
     v1 = Venue(name="The Musical Hop")
     v2 = Venue(name="The Dueling Pianos Bar")
     v3 = Venue(name="The Dueling")
+    v4 = Venue(name="Park Square Live Music & Coffee")
 
     v1.city = c1
     v1.geners.extend((g1, g4))
@@ -612,6 +588,8 @@ def bootstrap_data():
     v2.geners.extend((g2, g1, g3))
     v3.city = c2
     v3.geners.extend((g3, g1))
+    v4.city = c1
+    v4.geners.extend((g3, g1, g2))
 
     a1 = Artist(name="Danny Terris")
     a2 = Artist(name="Blake Graves")
