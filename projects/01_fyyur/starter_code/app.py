@@ -5,7 +5,7 @@
 import json
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, Response, flash, redirect, url_for
+from flask import Flask, render_template, request, Response, flash, redirect, url_for, jsonify, abort
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
@@ -35,25 +35,25 @@ VenueGenres = db.Table('venue_genres',
                        db.Column('venue_id', db.Integer,
                                  db.ForeignKey('venues.id')),
                        db.Column('genre_id', db.Integer,
-                                 db.ForeignKey('geners.id'))
+                                 db.ForeignKey('genres.id'))
                        )
 
 ArtistGenres = db.Table('artist_genres',
                         db.Column('artist_id', db.Integer,
                                   db.ForeignKey('artists.id')),
                         db.Column('genre_id', db.Integer,
-                                  db.ForeignKey('geners.id'))
+                                  db.ForeignKey('genres.id'))
                         )
 
 
-class Geners(db.Model):
-    __tablename__ = 'geners'
+class Genres(db.Model):
+    __tablename__ = 'genres'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120))
 
-    def __repr__(self):
-        return "%r" % self.name
+    # def __repr__(self):
+    #     return "<Genres (name=%s)" % self.name
 
 
 class City(db.Model):
@@ -93,8 +93,8 @@ class Venue(db.Model):
     facebook_link = db.Column(db.String(120))
     shows = db.relationship("Show", backref='venue', lazy=True)
     city_id = db.Column(db.Integer, db.ForeignKey('cities.id'))
-    geners = db.relationship(
-        'Geners', secondary=VenueGenres, backref='venues', lazy=True)
+    genres = db.relationship(
+        'Genres', secondary=VenueGenres, backref='venues', lazy=True)
 
     def __repr__(self):
         return "<Venue (name='%s')>" % (self.name)
@@ -109,14 +109,13 @@ class Artist(db.Model):
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
     shows = db.relationship("Show", backref='artist', lazy=True)
-    geners = db.relationship(
-        'Geners', secondary=ArtistGenres, backref='artists', lazy=True)
+    genres = db.relationship(
+        'Genres', secondary=ArtistGenres, backref='artists', lazy=True)
 
     def __repr__(self):
         return "<Artist(name='%s')>" % self.name
 
 
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
 class Show(db.Model):
     __tablename__ = 'shows'
 
@@ -228,13 +227,27 @@ def show_venue(venue_id):
     venue = Venue.query.get(venue_id)
     upcomingShows = getUpcomingShows(venue)
     pastShows = getPastShows(venue)
-    data = venue
-    data.city = venue.city
-    data.state = venue.city.state
-    data.upcoming_shows_count = len(upcomingShows)
-    data.upcoming_shows = upcomingShows
-    data.past_shows = pastShows
-    data.past_shows_count = len(pastShows)
+    genres = []
+    for g in venue.genres:
+        genres.append(g.name)
+    data = {
+        'id': venue.id,
+        'name': venue.name,
+        'city': venue.city,
+        'state': venue.city.state,
+        'upcoming_shows_count': len(upcomingShows),
+        'upcoming_shows': upcomingShows,
+        'past_shows': pastShows,
+        'past_shows_count': len(pastShows),
+        'genres': genres,
+        'facebook_link': venue.facebook_link,
+        'website': venue.website,
+        'image_link': venue.image_link,
+        'address': venue.address,
+        'phone': venue.phone,
+        'seeking_talent': venue.seeking_talent,
+        'seeking_description': venue.seeking_description
+    }
 
     return render_template('pages/show_venue.html', venue=data)
 
@@ -250,25 +263,64 @@ def create_venue_form():
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
-    # TODO: insert form data as a new Venue record in the db, instead
-    # TODO: modify data to be the data object returned from db insertion
+    try:
+        form = request.form
+        state_exit = State.query.filter(
+            State.name == form.get('state')).first()
+        state = state_exit if state_exit is not None else State(
+            name=form.get('state'))
+        city_exist = City.query.filter(City.name == form.get(
+            'city'), City.state_id == state.id).first()
+        city = city_exist if city_exist is not None else City(
+            name=form.get('city'))
+        city.state = state
+        genres = []
+        for item in form.getlist('genres'):
+            print(item)
+            genres_exist = Genres.query.filter(Genres.name == item).first()
+            genres.append(
+                genres_exist if genres_exist is not None else Genres(name=item))
 
-    # on successful db insert, flash success
-    flash('Venue ' + request.form['name'] + ' was successfully listed!')
-    # TODO: on unsuccessful db insert, flash an error instead.
-    # e.g., flash('An error occurred. Venue ' + data.name + ' could not be listed.')
-    # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
+        venue = Venue(name=form.get('name'), city=city, address=form.get(
+            'address'), phone=form.get('phone'), facebook_link=form.get('facebook_link'), genres=genres)
+
+        db.session.commit()
+    except:
+        flash('An error occurred. Venue ' +
+              form.get('name') + ' could not be listed.')
+        db.session.rollback()
+    else:
+        flash('Venue ' + request.form['name'] + ' was successfully listed!')
+    finally:
+        db.session.close()
+
     return render_template('pages/home.html')
 
 
 @app.route('/venues/<venue_id>', methods=['DELETE'])
 def delete_venue(venue_id):
-    # TODO: Complete this endpoint for taking a venue_id, and using
-    # SQLAlchemy ORM to delete a record. Handle cases where the session commit could fail.
+    error = False
+    try:
+        venue = Venue.query.get(venue_id)
+        for show in venue.shows:
+            db.session.delete(show)
 
-    # BONUS CHALLENGE: Implement a button to delete a Venue on a Venue Page, have it so that
-    # clicking that button delete it from the db then redirect the user to the homepage
-    return None
+        db.session.delete(venue)
+        db.session.commit()
+    except():
+        flash('An error occurred. Venue ' +
+              venue_id + ' could not be listed.')
+        db.session.rollback()
+        error = True
+    else:
+        flash('Venue was successfully deleted!')
+    finally:
+        db.session.close()
+
+    if error:
+        abort(500)
+    else:
+        return jsonify({'success': True})
 
 #  Artists
 #  ----------------------------------------------------------------
@@ -276,17 +328,7 @@ def delete_venue(venue_id):
 
 @app.route('/artists')
 def artists():
-    # TODO: replace with real data returned from querying the database
-    data = [{
-        "id": 4,
-        "name": "Guns N Petals",
-    }, {
-        "id": 5,
-        "name": "Matt Quevedo",
-    }, {
-        "id": 6,
-        "name": "The Wild Sax Band",
-    }]
+    data = Artist.query.all()
     return render_template('pages/artists.html', artists=data)
 
 
@@ -517,10 +559,10 @@ def bootstrap_data():
     c1 = City(name="San Francisco", state=st1)
     c2 = City(name="New York", state=st2)
 
-    g1 = Geners(name="jazz")
-    g2 = Geners(name="pop")
-    g3 = Geners(name="country")
-    g4 = Geners(name="R&B")
+    g1 = Genres(name="jazz")
+    g2 = Genres(name="pop")
+    g3 = Genres(name="country")
+    g4 = Genres(name="R&B")
 
     v1 = Venue(name="The Musical Hop",
                address="1015 Folsom Street", phone="123-123-1234",
@@ -567,21 +609,21 @@ def bootstrap_data():
                           datetime.timedelta(days=4)).replace(microsecond=0))
 
     v1.city = c1
-    v1.geners.extend((g1, g4))
+    v1.genres.extend((g1, g4))
     v2.city = c1
-    v2.geners.extend((g2, g1, g3))
+    v2.genres.extend((g2, g1, g3))
     v3.city = c2
-    v3.geners.extend((g3, g1))
+    v3.genres.extend((g3, g1))
     v4.city = c1
-    v4.geners.extend((g3, g1, g2))
+    v4.genres.extend((g3, g1, g2))
 
     a1 = Artist(name="Danny Terris", image_link='https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80')
     a2 = Artist(name="Blake Graves", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
     a3 = Artist(name="Jordan Stark", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
 
-    a1.geners.extend((g3, g1))
-    a2.geners.extend((g1, g4, g3))
-    a3.geners.extend((g2, g1))
+    a1.genres.extend((g3, g1))
+    a2.genres.extend((g1, g4, g3))
+    a3.genres.extend((g2, g1))
 
     s1.artist = a2
     s1.venue = v1
