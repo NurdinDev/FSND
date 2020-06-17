@@ -63,6 +63,7 @@ class City(db.Model):
     name = db.Column(db.String(120), nullable=False)
     state_id = db.Column(db.Integer, db.ForeignKey('states.id'))
     venues = db.relationship("Venue", backref='city', lazy=True)
+    artists = db.relationship("Artist", backref='city', lazy=True)
 
     def __repr__(self):
         return "%s" % self.name
@@ -108,7 +109,11 @@ class Artist(db.Model):
     phone = db.Column(db.String(120))
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
+    seeking_venue = db.Column(db.Boolean, default=False)
+    seeking_description = db.Column(db.String)
+    website = db.Column(db.String(120))
     shows = db.relationship("Show", backref='artist', lazy=True)
+    city_id = db.Column(db.Integer, db.ForeignKey('cities.id'))
     genres = db.relationship(
         'Genres', secondary=ArtistGenres, backref='artists', lazy=True)
 
@@ -158,7 +163,7 @@ def index():
 #  Venues
 #  ----------------------------------------------------------------
 
-def getUpcomingShows(venue):
+def getVenueUpcomingShows(venue):
     upcoming_shows = []
     shows = Show.query.filter(Show.venue_id == venue.id).all()
     now = datetime.datetime.now().replace(microsecond=0)
@@ -176,7 +181,7 @@ def getUpcomingShows(venue):
     return upcoming_shows
 
 
-def getPastShows(venue):
+def getVenuePastShows(venue):
     past_shows = []
     shows = Show.query.filter(Show.venue_id == venue.id).all()
     now = datetime.datetime.now().replace(microsecond=0)
@@ -188,6 +193,42 @@ def getPastShows(venue):
                     'artist_id': show.artist.id,
                     'artist_name': show.artist.name,
                     'artist_image_link': show.artist.image_link,
+                    'start_time': show.start_time.strftime('%Y-%m-%d %H:%M:%S')
+                }
+            )
+    return past_shows
+
+
+def getArtistUpcomingShows(artist):
+    upcoming_shows = []
+    shows = Show.query.filter(Show.artist_id == artist.id).all()
+    now = datetime.datetime.now().replace(microsecond=0)
+
+    for show in shows:
+        if show.start_time >= now:
+            upcoming_shows.append(
+                {
+                    'venue_id': show.venue.id,
+                    'venue_name': show.venue.name,
+                    'venue_image_link': show.venue.image_link,
+                    'start_time': show.start_time.strftime('%Y-%m-%d %H:%M:%S')
+                }
+            )
+    return upcoming_shows
+
+
+def getArtistPastShows(artist):
+    past_shows = []
+    shows = Show.query.filter(Show.artist_id == artist.id).all()
+    now = datetime.datetime.now().replace(microsecond=0)
+
+    for show in shows:
+        if show.start_time < now:
+            past_shows.append(
+                {
+                    'venue_id': show.venue.id,
+                    'venue_name': show.venue.name,
+                    'venue_image_link': show.venue.image_link,
                     'start_time': show.start_time.strftime('%Y-%m-%d %H:%M:%S')
                 }
             )
@@ -225,8 +266,8 @@ def search_venues():
 @app.route('/venues/<int:venue_id>')
 def show_venue(venue_id):
     venue = Venue.query.get(venue_id)
-    upcomingShows = getUpcomingShows(venue)
-    pastShows = getPastShows(venue)
+    upcomingShows = getVenueUpcomingShows(venue)
+    pastShows = getVenuePastShows(venue)
     genres = []
     for g in venue.genres:
         genres.append(g.name)
@@ -346,29 +387,29 @@ def search_artists():
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
-    # shows the venue page with the given venue_id
-    # TODO: replace with real venue data from the venues table, using venue_id
+    artist = Artist.query.get(artist_id)
+    upcomingShows = getArtistUpcomingShows(artist)
+    pastShows = getArtistPastShows(artist)
+    genres = []
+    for g in artist.genres:
+        genres.append(g.name)
+
     data = {
-        "id": 4,
-        "name": "Guns N Petals",
-        "genres": ["Rock n Roll"],
-        "city": "San Francisco",
-        "state": "CA",
-        "phone": "326-123-5000",
-        "website": "https://www.gunsnpetalsband.com",
-        "facebook_link": "https://www.facebook.com/GunsNPetals",
-        "seeking_venue": True,
-        "seeking_description": "Looking for shows to perform at in the San Francisco Bay Area!",
-        "image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
-        "past_shows": [{
-            "venue_id": 1,
-            "venue_name": "The Musical Hop",
-            "venue_image_link": "https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
-            "start_time": "2019-05-21T21:30:00.000Z"
-        }],
-        "upcoming_shows": [],
-        "past_shows_count": 1,
-        "upcoming_shows_count": 0,
+        'id': artist.id,
+        'name': artist.name,
+        'city': artist.city,
+        'state': artist.city.state,
+        'upcoming_shows_count': len(upcomingShows),
+        'upcoming_shows': upcomingShows,
+        'past_shows': pastShows,
+        'past_shows_count': len(pastShows),
+        'genres': genres,
+        'facebook_link': artist.facebook_link,
+        'website': artist.website,
+        'image_link': artist.image_link,
+        'phone': artist.phone,
+        'seeking_venue': artist.seeking_venue,
+        'seeking_description': artist.seeking_description
     }
 
     return render_template('pages/show_artist.html', artist=data)
@@ -565,26 +606,33 @@ def bootstrap_data():
                website="https://www.themusicalhop.com",
                facebook_link="https://www.facebook.com/TheMusicalHop",
                image_link="https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
+               seeking_talent=True,
                seeking_description="We are on the lookout for a local artist to play every two weeks. Please call us.",
                )
+
     v2 = Venue(name="The Dueling Pianos Bar",
                address="1015 Folsom Street", phone="123-123-1234",
                website="https://www.themusicalhop.com",
                facebook_link="https://www.facebook.com/TheMusicalHop",
                image_link="https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
+               seeking_talent=True,
                seeking_description="We are on the lookout for a local artist to play every two weeks. Please call us.",
                )
+
     v3 = Venue(name="The Dueling",
                address="1015 Folsom Street", phone="123-123-1234",
                website="https://www.themusicalhop.com",
                facebook_link="https://www.facebook.com/TheMusicalHop",
                image_link="https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
+               seeking_talent=True,
                seeking_description="We are on the lookout for a local artist to play every two weeks. Please call us.",
                )
+
     v4 = Venue(name="Park Square Live Music & Coffee",
                address="1015 Folsom Street", phone="123-123-1234",
                website="https://www.themusicalhop.com",
                facebook_link="https://www.facebook.com/TheMusicalHop",
+               seeking_talent=True,
                image_link="https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60",
                seeking_description="We are on the lookout for a local artist to play every two weeks. Please call us.",
                )
@@ -613,12 +661,41 @@ def bootstrap_data():
     v4.city = c1
     v4.genres.extend((g3, g1, g2))
 
-    a1 = Artist(name="Guns N Petals", image_link='https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80')
-    a2 = Artist(name="Matt Quevado", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
-    a3 = Artist(name="The Wild Sax Band", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
+    a1 = Artist(
+        name="Guns N Petals",
+        phone="01010101010",
+        website="https://www.gunsnpetalsband.com",
+        facebook_link="https://www.facebook.com/GunsNPetals",
+        seeking_venue=True,
+        seeking_description="Looking for shows to perform at in the San Francisco Bay Area!",
+        image_link="https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
+    )
 
+    a2 = Artist(
+        name="Matt Quevado",
+        phone="01010101010",
+        website="https://www.gunsnpetalsband.com",
+        facebook_link="https://www.facebook.com/GunsNPetals",
+        seeking_venue=True,
+        seeking_description="Looking for shows to perform at in the San Francisco Bay Area!",
+        image_link="https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
+    )
+
+    a3 = Artist(
+        name="The Wild Sax Band",
+        phone="01010101010",
+        website="https://www.gunsnpetalsband.com",
+        facebook_link="https://www.facebook.com/GunsNPetals",
+        seeking_venue=True,
+        seeking_description="Looking for shows to perform at in the San Francisco Bay Area!",
+        image_link="https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
+    )
+
+    a1.city = c1
     a1.genres.extend((g3, g1))
+    a2.city = c2
     a2.genres.extend((g1, g4, g3))
+    a3.city = c2
     a3.genres.extend((g2, g1))
 
     s1.artist = a2
