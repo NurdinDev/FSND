@@ -214,7 +214,7 @@ def venues():
 @app.route('/venues/search', methods=['POST'])
 def search_venues():
     search_term = request.form.get('search_term', '')
-    query = Venue.query.filter(Venue.name.like(f'%{search_term}%'))
+    query = Venue.query.filter(Venue.name.ilike(f'%{search_term}%'))
     response = {
         "count": query.count(),
         "data": query.all()
@@ -334,18 +334,14 @@ def artists():
 
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
-    # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-    # seach for "A" should return "Guns N Petals", "Matt Quevado", and "The Wild Sax Band".
-    # search for "band" should return "The Wild Sax Band".
+    search_term = request.form.get('search_term', '')
+    query = Artist.query.filter(Artist.name.ilike(f'%{search_term}%'))
     response = {
-        "count": 1,
-        "data": [{
-            "id": 4,
-            "name": "Guns N Petals",
-            "num_upcoming_shows": 0,
-        }]
+        "count": query.count(),
+        "data": query.all()
     }
-    return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
+
+    return render_template('pages/search_artists.html', results=response, search_term=search_term)
 
 
 @app.route('/artists/<int:artist_id>')
@@ -617,9 +613,9 @@ def bootstrap_data():
     v4.city = c1
     v4.genres.extend((g3, g1, g2))
 
-    a1 = Artist(name="Danny Terris", image_link='https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80')
-    a2 = Artist(name="Blake Graves", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
-    a3 = Artist(name="Jordan Stark", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
+    a1 = Artist(name="Guns N Petals", image_link='https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80')
+    a2 = Artist(name="Matt Quevado", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
+    a3 = Artist(name="The Wild Sax Band", image_link='https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80')
 
     a1.genres.extend((g3, g1))
     a2.genres.extend((g1, g4, g3))
