@@ -52,8 +52,8 @@ class Genres(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120))
 
-    # def __repr__(self):
-    #     return "<Genres (name=%s)" % self.name
+    def __repr__(self):
+        return self.name
 
 
 class City(db.Model):
@@ -235,13 +235,38 @@ def getArtistPastShows(artist):
     return past_shows
 
 
+def getOrInsertState(value):
+    state_exist = State.query.filter(
+        State.name == value).first()
+    state = state_exist if state_exist is not None else State(
+        name=value)
+    return state
+
+
+def getOrInsertCity(value, state):
+    city_exist = City.query.filter(
+        City.name == value, City.state_id == state.id).first()
+    city = city_exist if city_exist is not None else City(
+        name=value)
+    return city
+
+
+def getOrInsertGenres(values):
+    genres = []
+    for item in values:
+        genres_exist = Genres.query.filter(Genres.name == item).first()
+        genres.append(
+            genres_exist if genres_exist is not None else Genres(name=item))
+    return genres
+
+
 @app.route('/venues')
 def venues():
     data = []
     for item in City.query.all():
         venues = item.venues
         for venue in venues:
-            venue.upcoming_shows_count = len(getUpcomingShows(venue))
+            venue.upcoming_shows_count = len(getVenueUpcomingShows(venue))
 
         data.append({
             'city': item.name,
@@ -306,21 +331,10 @@ def create_venue_form():
 def create_venue_submission():
     try:
         form = request.form
-        state_exit = State.query.filter(
-            State.name == form.get('state')).first()
-        state = state_exit if state_exit is not None else State(
-            name=form.get('state'))
-        city_exist = City.query.filter(City.name == form.get(
-            'city'), City.state_id == state.id).first()
-        city = city_exist if city_exist is not None else City(
-            name=form.get('city'))
+        state = getOrInsertState(form.get('state'))
+        city = getOrInsertCity(form.get('city'), state)
         city.state = state
-        genres = []
-        for item in form.getlist('genres'):
-            print(item)
-            genres_exist = Genres.query.filter(Genres.name == item).first()
-            genres.append(
-                genres_exist if genres_exist is not None else Genres(name=item))
+        genres = getOrInsertGenres(form.getlist('genres'))
 
         venue = Venue(name=form.get('name'), city=city, address=form.get(
             'address'), phone=form.get('phone'), facebook_link=form.get('facebook_link'), genres=genres)
@@ -421,29 +435,39 @@ def show_artist(artist_id):
 @app.route('/artists/<int:artist_id>/edit', methods=['GET'])
 def edit_artist(artist_id):
     form = ArtistForm()
-    artist = {
-        "id": 4,
-        "name": "Guns N Petals",
-        "genres": ["Rock n Roll"],
-        "city": "San Francisco",
-        "state": "CA",
-        "phone": "326-123-5000",
-        "website": "https://www.gunsnpetalsband.com",
-        "facebook_link": "https://www.facebook.com/GunsNPetals",
-        "seeking_venue": True,
-        "seeking_description": "Looking for shows to perform at in the San Francisco Bay Area!",
-        "image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80"
-    }
-    # TODO: populate form with fields from artist with ID <artist_id>
+
+    artist = Artist.query.get(artist_id)
+    artist.state = artist.city.state
+
     return render_template('forms/edit_artist.html', form=form, artist=artist)
 
 
 @app.route('/artists/<int:artist_id>/edit', methods=['POST'])
 def edit_artist_submission(artist_id):
-    # TODO: take values from the form submitted, and update existing
-    # artist record with ID <artist_id> using the new attributes
+    error = False
+    form = request.form
+    try:
+        artist = Artist.query.get(artist_id)
+        artist.name = form.get('name')
+        state = getOrInsertState(form.get('state'))
+        artist.city = getOrInsertCity(form.get('city'), state)
+        artist.city.state = state
+        artist.genres = getOrInsertGenres(form.getlist('genres'))
+        artist.phone = form.get('phone')
+        artist.facebook_link = form.get('facebook_link')
 
-    return redirect(url_for('show_artist', artist_id=artist_id))
+        db.session.add(artist)
+        db.session.commit()
+    except:
+        error = True
+        db.session.rollback()
+    finally:
+        db.session.close()
+
+    if error:
+        abort(500)
+    else:
+        return redirect(url_for('show_artist', artist_id=artist_id))
 
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
