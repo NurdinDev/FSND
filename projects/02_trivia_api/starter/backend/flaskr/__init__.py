@@ -30,8 +30,10 @@ def get_formated_question(page, searchTerm=''):
         'total_questions': total_questions
     }
 
+
 def get_formated_question_by_category(page, categoy_id):
-    questions = Question.query.filter(Question.category == categoy_id).paginate(page, 10)
+    questions = Question.query.filter(
+        Question.category == categoy_id).paginate(page, 10)
     formated_question = [question.format() for question in questions.items]
     total_questions = questions.total
 
@@ -41,11 +43,14 @@ def get_formated_question_by_category(page, categoy_id):
     }
 
 
+def get_question_by_category(category_id):
+    return Question.query.filter(Question.category == category_id).all()
+
+
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__)
     setup_db(app)
-
     CORS(app)
 
     @app.after_request
@@ -72,7 +77,6 @@ def create_app(test_config=None):
             **get_formated_question_by_category(page, categoy_id)
         }
         return jsonify(returndObj)
-
 
     @app.route('/questions', methods=['GET', 'POST'])
     def get_question():
@@ -120,7 +124,7 @@ def create_app(test_config=None):
 
             return jsonify(returndObj)
 
-        except:
+        except Exception:
             abort(422)
 
     @app.route('/question/<int:question_id>', methods=['DELETE'])
@@ -141,7 +145,9 @@ def create_app(test_config=None):
             body = request.get_json()
             previousQuestions = body.get('previous_questions')
             quizCategory = body.get('quiz_category')
-            questions = Question.query.filter(Question.category == quizCategory['id']).all() if quizCategory['id'] else Question.query.all()
+            qId = quizCategory['id']
+            questions = get_formated_category(
+                qId) if quizCategory['id'] else Question.query.all()
             filterdQuestions = [question.format() for question in questions]
             randomQuestion = None
             if len(previousQuestions):
@@ -159,9 +165,8 @@ def create_app(test_config=None):
                 'question': randomQuestion
             })
 
-        except:
+        except Exception:
             abort(422)
-
 
     @app.errorhandler(422)
     def unprocessable(error):
