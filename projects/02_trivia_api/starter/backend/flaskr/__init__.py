@@ -88,35 +88,41 @@ def create_app(test_config=None):
         total_questions = 0
         page = request.args.get('page', 1, type=int)
         if request.method == 'POST':
-            body = request.get_json()
-            searchTerm = body.get('searchTerm')
-            if searchTerm is not None:
-                return jsonify({
-                    'success': True,
-                    **get_formated_question(page, searchTerm),
-                    'current_category': None,
-                    'categories': get_formated_category(),
-                }), 200
+            try:
+                body = request.get_json()
+                searchTerm = body.get('searchTerm')
+                if searchTerm is not None:
+                    return jsonify({
+                        'success': True,
+                        **get_formated_question(page, searchTerm),
+                        'current_category': None,
+                        'categories': get_formated_category(),
+                    }), 200
+            except Exception:
+                abort(422)
             else:
                 category_id = body.get('category')
 
                 if not Category.query.get(category_id):
                     abort(404)
                 else:
-                    question = Question(
-                        question=body.get('question'),
-                        answer=body.get('answer'),
-                        category=body.get('category'),
-                        difficulty=body.get('difficulty')
-                    )
-                    question.insert()
-                    return jsonify({
-                        'success': True,
-                        **get_formated_question(page),
-                        'current_category': None,
-                        'categories': get_formated_category(),
-                        'created': question.id
-                    }), 201
+                    try:
+                        question = Question(
+                            question=body.get('question'),
+                            answer=body.get('answer'),
+                            category=body.get('category'),
+                            difficulty=body.get('difficulty')
+                        )
+                        question.insert()
+                        return jsonify({
+                            'success': True,
+                            **get_formated_question(page),
+                            'current_category': None,
+                            'categories': get_formated_category(),
+                            'created': question.id
+                        }), 201
+                    except Exception:
+                        abort(422)
 
         elif request.method == 'GET':
             return jsonify({
@@ -132,11 +138,14 @@ def create_app(test_config=None):
         if question is None:
             abort(404)
         else:
-            question.delete()
-            return jsonify({
-                'success': True,
-                'id': question_id
-            })
+            try:
+                question.delete()
+                return jsonify({
+                    'success': True,
+                    'id': question_id
+                })
+            except Exception:
+                abort(422)
 
     @app.route('/quizzes', methods=['POST'])
     def play():
@@ -145,7 +154,8 @@ def create_app(test_config=None):
             previousQuestions = body.get('previous_questions')
             quizCategory = body.get('quiz_category')
             qId = quizCategory['id']
-            questions = get_question_by_category(qId) if quizCategory['id'] else Question.query.all()
+            questions = get_question_by_category(
+                qId) if quizCategory['id'] else Question.query.all()
             filteredQuestions = [question.format() for question in questions]
             randomQuestion = None
             if len(previousQuestions):
@@ -163,8 +173,7 @@ def create_app(test_config=None):
                 'question': randomQuestion
             })
 
-        except Exception as e:
-            print(e)
+        except Exception:
             abort(422)
 
     @app.errorhandler(422)
