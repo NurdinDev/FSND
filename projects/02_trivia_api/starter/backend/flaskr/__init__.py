@@ -24,7 +24,6 @@ def get_formated_question(page, searchTerm=''):
     questions = questions.paginate(page, 10)
     formated_question = [question.format() for question in questions.items]
     total_questions = questions.total
-
     return {
         'questions': formated_question,
         'total_questions': total_questions
@@ -69,33 +68,40 @@ def create_app(test_config=None):
 
     @app.route('/categories/<int:categoy_id>/questions')
     def questions_by_category(categoy_id):
-        page = request.args.get('page', 1, type=int)
-        returndObj = {
-            'success': True,
-            'current_category': categoy_id,
-            'categories': get_formated_category(),
-            **get_formated_question_by_category(page, categoy_id)
-        }
-        return jsonify(returndObj)
+        category = Category.query.get(categoy_id)
+        if not category:
+            abort(404)
+        else:
+            page = request.args.get('page', 1, type=int)
+            returnedObj = {
+                'success': True,
+                'current_category': categoy_id,
+                'categories': get_formated_category(),
+                **get_formated_question_by_category(page, categoy_id)
+            }
+            return jsonify(returnedObj)
 
     @app.route('/questions', methods=['GET', 'POST'])
     def get_question():
-        try:
-            extraInfo = {}
-            formated_question = []
-            total_questions = 0
-            returndObj = {}
-            if request.method == 'POST':
-                body = request.get_json()
-                searchTerm = body.get('searchTerm')
-                if searchTerm is not None:
-                    page = request.args.get('page', 1, type=int)
-                    returndObj = {
-                        'success': True,
-                        **get_formated_question(page, searchTerm),
-                        'current_category': None,
-                        'categories': get_formated_category(),
-                    }
+        extraInfo = {}
+        formated_question = []
+        total_questions = 0
+        page = request.args.get('page', 1, type=int)
+        if request.method == 'POST':
+            body = request.get_json()
+            searchTerm = body.get('searchTerm')
+            if searchTerm is not None:
+                return jsonify({
+                    'success': True,
+                    **get_formated_question(page, searchTerm),
+                    'current_category': None,
+                    'categories': get_formated_category(),
+                }), 200
+            else:
+                category_id = body.get('category')
+
+                if not Category.query.get(category_id):
+                    abort(404)
                 else:
                     question = Question(
                         question=body.get('question'),
@@ -104,30 +110,23 @@ def create_app(test_config=None):
                         difficulty=body.get('difficulty')
                     )
                     question.insert()
-                    page = request.args.get('page', 1, type=int)
-                    returndObj = {
+                    return jsonify({
                         'success': True,
                         **get_formated_question(page),
                         'current_category': None,
                         'categories': get_formated_category(),
                         'created': question.id
-                    }
+                    }), 201
 
-            elif request.method == 'GET':
-                page = request.args.get('page', 1, type=int)
-                returndObj = {
-                    'success': True,
-                    'current_category': None,
-                    'categories': get_formated_category(),
-                    **get_formated_question(page)
-                }
+        elif request.method == 'GET':
+            return jsonify({
+                'success': True,
+                'current_category': None,
+                'categories': get_formated_category(),
+                **get_formated_question(page)
+            }), 200
 
-            return jsonify(returndObj)
-
-        except Exception:
-            abort(422)
-
-    @app.route('/question/<int:question_id>', methods=['DELETE'])
+    @app.route('/questions/<int:question_id>', methods=['DELETE'])
     def delete_question(question_id):
         question = Question.query.get(question_id)
         if question is None:
@@ -146,26 +145,26 @@ def create_app(test_config=None):
             previousQuestions = body.get('previous_questions')
             quizCategory = body.get('quiz_category')
             qId = quizCategory['id']
-            questions = get_formated_category(
-                qId) if quizCategory['id'] else Question.query.all()
-            filterdQuestions = [question.format() for question in questions]
+            questions = get_question_by_category(qId) if quizCategory['id'] else Question.query.all()
+            filteredQuestions = [question.format() for question in questions]
             randomQuestion = None
             if len(previousQuestions):
                 newlist = []
-                for question in filterdQuestions:
+                for question in filteredQuestions:
                     if question not in previousQuestions:
                         newlist.append(question)
                 if len(newlist):
                     randomQuestion = random.choice(newlist)
             else:
-                randomQuestion = random.choice(filterdQuestions)
+                randomQuestion = random.choice(filteredQuestions)
 
             return jsonify({
                 'success': True,
                 'question': randomQuestion
             })
 
-        except Exception:
+        except Exception as e:
+            print(e)
             abort(422)
 
     @app.errorhandler(422)
@@ -174,7 +173,7 @@ def create_app(test_config=None):
             'success': False,
             'error': error,
             'message': "unprocessable"
-        })
+        }), 422
 
     @app.errorhandler(404)
     def not_found(error):
@@ -182,6 +181,6 @@ def create_app(test_config=None):
             'success': False,
             'error': 404,
             'message': "resource not found!"
-        })
+        }), 404
 
     return app
