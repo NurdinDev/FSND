@@ -161,7 +161,7 @@ def create_app(test_config=None):
             if len(previousQuestions):
                 newlist = []
                 for question in filteredQuestions:
-                    if question not in previousQuestions:
+                    if question['id'] not in previousQuestions:
                         newlist.append(question)
                 if len(newlist):
                     randomQuestion = random.choice(newlist)
