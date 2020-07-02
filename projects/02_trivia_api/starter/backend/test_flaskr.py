@@ -40,7 +40,7 @@ class TriviaTestCase(unittest.TestCase):
     def test_get_questions_by_category(self):
         """Test get questions by category Id"""
         category_id = Category.query.first().id
-        res = self.client().get('/categories/%s/questions'%category_id)
+        res = self.client().get('/categories/%s/questions' % category_id)
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['success'])
@@ -63,10 +63,11 @@ class TriviaTestCase(unittest.TestCase):
 
     def test_api_can_post_new_question(self):
         """Test post new question"""
+        body = {'question': "new question",
+                'answer': "new answer", 'category': '1', 'difficulty': 2}
         res = self.client().post(
             '/questions',
-            data=json.dumps(dict({'question': "new question",
-                                  'answer': "new answer", 'category': '1', 'difficulty': 2})),
+            data=json.dumps(dict(body)),
             content_type='application/json')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 201)
@@ -75,8 +76,7 @@ class TriviaTestCase(unittest.TestCase):
         # post invalid data
         res = self.client().post(
             '/questions',
-            data=json.dumps(dict({'question': "new question",
-                                  'answer': "new answer", 'category': '0', 'difficulty': 2})),
+            data=json.dumps(dict(body)),
             content_type='application/json')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 404)
@@ -85,7 +85,8 @@ class TriviaTestCase(unittest.TestCase):
     def test_api_can_search_in_questions(self):
         """Test search question API"""
         randomTerm = Question.query.first().question.split(' ', 1)[0]
-        res = self.client().post('/questions', data=json.dumps(dict(searchTerm=randomTerm)),
+        data_json = json.dumps(dict(searchTerm=randomTerm))
+        res = self.client().post('/questions', data=data_json,
                                  content_type='application/json')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
@@ -99,7 +100,7 @@ class TriviaTestCase(unittest.TestCase):
         """Test delete a question"""
         existID = Question.query.first().id
         print(existID)
-        res = self.client().delete('/questions/%s'%existID)
+        res = self.client().delete('/questions/%s' % existID)
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['success'])
@@ -111,11 +112,12 @@ class TriviaTestCase(unittest.TestCase):
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 404)
         self.assertFalse(data['success'])
-    
+
     def test_api_can_play_quiz(self):
         """Test post quizzes API"""
         category_id = Category.query.first().id
-        total_question = len(Question.query.filter(Question.category == category_id).all())
+        total_question = len(Question.query.filter(
+            Question.category == category_id).all())
         total_request = 0
         previous_question = []
         while total_request < total_question:
@@ -123,7 +125,7 @@ class TriviaTestCase(unittest.TestCase):
                 previous_questions=previous_question,
                 quiz_category={'id': category_id}
             )),
-            content_type='application/json')
+                content_type='application/json')
             data = json.loads(res.data)
             previous_question.append(data['question'])
             self.assertEqual(res.status_code, 200)
