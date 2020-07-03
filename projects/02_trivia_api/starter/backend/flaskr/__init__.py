@@ -88,32 +88,34 @@ def create_app(test_config=None):
         total_questions = 0
         page = request.args.get('page', 1, type=int)
         if request.method == 'POST':
-            try:
-                body = request.get_json()
-                searchTerm = body.get('searchTerm')
-                if searchTerm is not None:
-                    return jsonify({
-                        'success': True,
-                        **get_formated_question(page, searchTerm),
-                        'current_category': None,
-                        'categories': get_formated_category(),
-                    }), 200
-            except Exception:
-                abort(422)
-            else:
-                category_id = body.get('category')
+            body = request.get_json()
+            searchTerm = body.get('searchTerm')
 
-                if not Category.query.get(category_id):
-                    abort(404)
+            if searchTerm is not None:
+                return jsonify({
+                    'success': True,
+                    **get_formated_question(page, searchTerm),
+                    'current_category': None,
+                    'categories': get_formated_category(),
+                }), 200
+            else:
+                question = body.get('question', None)
+                ansewer = body.get('ansewer', None)
+                category = body.get('category', None)
+                difficulty = body.get('difficulty', None)
+
+                if not category or not Category.query.get(category):
+                    abort(422)
                 else:
                     try:
                         question = Question(
-                            question=body.get('question'),
-                            answer=body.get('answer'),
-                            category=body.get('category'),
-                            difficulty=body.get('difficulty')
+                            question=question,
+                            answer=ansewer,
+                            category=category,
+                            difficulty=difficulty
                         )
                         question.insert()
+
                         return jsonify({
                             'success': True,
                             **get_formated_question(page),
@@ -121,6 +123,7 @@ def create_app(test_config=None):
                             'categories': get_formated_category(),
                             'created': question.id
                         }), 201
+
                     except Exception:
                         abort(422)
 
@@ -180,7 +183,7 @@ def create_app(test_config=None):
     def unprocessable(error):
         return jsonify({
             'success': False,
-            'error': error,
+            'error': 422,
             'message': "unprocessable"
         }), 422
 

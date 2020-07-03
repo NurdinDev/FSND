@@ -20,6 +20,20 @@ class TriviaTestCase(unittest.TestCase):
             'localhost:5432', self.database_name)
         setup_db(self.app, self.database_path)
 
+        self.new_question = {
+            'question':  'What is love?',
+            'answer': "Oh baby, don't hurt me",
+            'difficulty': '100500',
+            'category': '2'
+        }
+
+        self.invalid_question = {
+            'question':  0,
+            'answer': 0,
+            'difficulty': 0,
+            'category': 0
+        }
+
         # binds the app to the current context
         with self.app.app_context():
             self.db = SQLAlchemy()
@@ -31,7 +45,7 @@ class TriviaTestCase(unittest.TestCase):
         """Executed after reach test"""
         pass
 
-    def test_api_can_get_categories(self):
+    def test_get_categories(self):
         res = self.client().get('/categories')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
@@ -45,7 +59,9 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertTrue(data['success'])
         self.assertTrue(len(data['questions']))
-        # Test if the category not exist
+
+    def test_404_get_questions_by_category(self):
+        """Test if the category not exist"""
         res = self.client().get('/categories/0/questions')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 404)
@@ -61,28 +77,29 @@ class TriviaTestCase(unittest.TestCase):
         self.assertTrue(len(data['questions']))
         self.assertEqual(len(data['questions']), 10)
 
-    def test_api_can_post_new_question(self):
-        """Test post new question"""
-        body = {'question': "new question",
-                'answer': "new answer", 'category': '1', 'difficulty': 2}
-        res = self.client().post(
-            '/questions',
-            data=json.dumps(dict(body)),
-            content_type='application/json')
-        data = json.loads(res.data)
-        self.assertEqual(res.status_code, 201)
-        self.assertTrue(data['success'])
-        self.assertTrue(data['created'])
-        # post invalid data
-        res = self.client().post(
-            '/questions',
-            data=json.dumps(dict(body)),
-            content_type='application/json')
+    def test_404_get_paginated_questions(self):
+        res = self.client().get('/questions?page=10000')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 404)
         self.assertFalse(data['success'])
 
-    def test_api_can_search_in_questions(self):
+    def test_post_new_question(self):
+        """Test post new question"""
+        res = self.client().post('/questions', json=self.new_question)
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(data['success'])
+        self.assertTrue(data['created'])
+
+    def test_422_post_empty_question(self):
+        """Test 422 error when send empty information"""
+        res = self.client().post('/questions',json=self.invalid_question)
+        data = json.loads(res.data)
+        self.assertEqual(res.status_code, 422)
+        self.assertFalse(data['success'])
+
+
+    def test_search_questions(self):
         """Test search question API"""
         randomTerm = Question.query.first().question.split(' ', 1)[0]
         data_json = json.dumps(dict(searchTerm=randomTerm))
@@ -96,10 +113,9 @@ class TriviaTestCase(unittest.TestCase):
         for question in data['questions']:
             self.assertTrue(re.search(randomTerm, question['question'], re.I))
 
-    def test_api_can_delete_a_question(self):
+    def test_delete_question(self):
         """Test delete a question"""
         existID = Question.query.first().id
-        print(existID)
         res = self.client().delete('/questions/%s' % existID)
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 200)
@@ -108,12 +124,15 @@ class TriviaTestCase(unittest.TestCase):
         self.assertFalse(Question.query.get(existID))
 
         # if the id not exist
+
+    def test_404_delete_question(self):
+        """Test 404 error when delete a question with wrong id"""
         res = self.client().delete('/questions/0')
         data = json.loads(res.data)
         self.assertEqual(res.status_code, 404)
         self.assertFalse(data['success'])
 
-    def test_api_can_play_quiz(self):
+    def test_quiz(self):
         """Test post quizzes API"""
         category_id = Category.query.first().id
         total_question = len(Question.query.filter(
