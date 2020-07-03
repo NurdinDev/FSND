@@ -1,7 +1,0 @@
-__pycache__/
-.vscode/
-
-__pypackages__/
-flasler/__pypackages__
-# Environments
-env/
