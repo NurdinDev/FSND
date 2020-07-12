@@ -28,7 +28,8 @@ def get_token_auth_header():
     auth = request.headers.get("Authorization", None)
     if not auth:
         raise AuthError({"code": "authorization_header_missing",
-                         "description": "Authorization header is expected"}, 401)
+                         "description": "Authorization header is expected"},
+                        401)
     parts = auth.split()
     if parts[0].lower() != "bearer":
         raise AuthError({"code": "invalid_header",
@@ -39,7 +40,8 @@ def get_token_auth_header():
         raise AuthError({"code": "invalid_header",
                          "description": "Token not found"}, 401)
     elif len(parts) > 2:
-        raise AuthError({"code": "invalid_header", "description": "Authorization header must be"
+        raise AuthError({"code": "invalid_header",
+                         "description": "Authorization header must be"
                          " Bearer token"}, 401)
 
     token = parts[1]
@@ -105,7 +107,7 @@ def verify_decode_jwt(token):
         except jwt.JWTClaimsError:
             raise AuthError({
                 'code': 'invalid_claims',
-                'description': 'Incorrect claims. Please, check the audience and issuer.'
+                'description': 'Incorrect claims.'
             }, 401)
 
         except jwt.JWTError:

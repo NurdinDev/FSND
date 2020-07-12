@@ -32,12 +32,6 @@ def get_drinks():
 @requires_auth('get:drinks-detail')
 def get_drinks_detail(payload):
     """Get Drinks list"""
-    # GET /drinks-detail
-    #     it should require the 'get:drinks-detail' permission
-    #     it should contain the drink.long() data representation
-    # returns status code 200 and json {"success": True, "drinks": drinks} where drinks is the list of drinks
-    #     or appropriate status code indicating reason for failure
-
     drinks = Drink.query.all()
 
     return jsonify({
@@ -50,19 +44,13 @@ def get_drinks_detail(payload):
 @requires_auth('post:drinks')
 def add_drink(payload):
     """Add New Drink"""
-    #  POST /drinks
-    #     it should create a new row in the drinks table
-    #     it should require the 'post:drinks' permission
-    #     it should contain the drink.long() data representation
-    # returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the newly created drink
-    #     or appropriate status code indicating reason for failure
     body = request.get_json()
-    if not body or not 'title' in body:
+    if not body or 'title' not in body:
         abort(400)
 
     try:
         drink = Drink(title=body.get('title', None),
-                     recipe=str(body.get('recipe', None)).replace("\'", "\""))
+                      recipe=str(body.get('recipe', None)).replace("\'", "\""))
         drink.insert()
 
         return jsonify({
@@ -77,15 +65,6 @@ def add_drink(payload):
 @app.route('/drinks/<int:id>', methods=['PATCH'])
 @requires_auth('patch:drinks')
 def patch_drink(payload, id):
-    #   PATCH /drinks/<id>
-    #     where <id> is the existing model id
-    #     it should respond with a 404 error if <id> is not found
-    #     it should update the corresponding row for <id>
-    #     it should require the 'patch:drinks' permission
-    #     it should contain the drink.long() data representation
-    # returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the updated drink
-    #     or appropriate status code indicating reason for failure
-
     drink = Drink.query.get(id)
 
     if not drink:
@@ -99,7 +78,7 @@ def patch_drink(payload, id):
         drink.title = title
     if recipe:
         drink.recipe = str(recipe).replace("\'", "\"")
-    
+
     drink.update()
 
     drinks = Drink.query.all()
@@ -116,13 +95,13 @@ def delete_drink(payload, drinkId):
     drink = Drink.query.get(drinkId)
     if not drink:
         abort(404)
-    
+
     drink.delete()
 
     return jsonify({
         'success': True,
         'delete': drinkId
-    })    
+    })
 
 
 # Error Handling
@@ -158,6 +137,7 @@ def server_error(error):
         'error': 500,
         'message': "internal server error!"
     }), 500
+
 
 @app.errorhandler(400)
 def server_error(error):
